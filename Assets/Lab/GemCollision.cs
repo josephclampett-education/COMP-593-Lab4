@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using Oculus.Platform;
 using UnityEngine;
 
 public class GemCollision : MonoBehaviour
@@ -7,7 +9,9 @@ public class GemCollision : MonoBehaviour
     public float respawnTime = 2.0f; // Time to wait before respawning
    // private bool isRespawning = false; // Flag to check if the gem is respawning
     private Rigidbody gemRigidbody; // Reference to the gem's Rigidbody
-
+    private GameObject NPC;
+    private GameObject Gems;
+    public bool message;
     private void Start()
     {
         gemRigidbody = GetComponent<Rigidbody>(); 
@@ -27,9 +31,7 @@ public class GemCollision : MonoBehaviour
     {
        // isRespawning = true; // Set the respawning flag
         Debug.Log("Starting RespawnBall Coroutine");
-
-        // Set the Rigidbody to kinematic to stop movement
-       // gemRigidbody.isKinematic = true; 
+        
 
         // Disable the gem's visual representation (but keep the script active)
         GetComponent<Renderer>().enabled = false; 
@@ -45,10 +47,18 @@ public class GemCollision : MonoBehaviour
         GetComponent<Renderer>().enabled = true; 
         // Re-enable any other components that were disabled
         GetComponent<BoxCollider>().enabled = true; 
+    }
 
-        // Set the Rigidbody back to non-kinematic to allow movement again
-        //gemRigidbody.isKinematic = false; 
 
-        //isRespawning = false; // Reset the respawning flag
+    public void Update()
+    {
+      
+    }
+
+    public void ToggleEnable()
+    {
+        Renderer rend = GetComponent<Renderer>();
+        bool enable = rend.enabled;
+        rend.enabled = !enable;
     }
 }
