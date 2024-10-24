@@ -41,6 +41,11 @@ def send(sock, msg):
 	print("Sent: ", msg)
 
 # ================
+# MediaPipe Setup
+# ================
+mediapipe = MediaPipe()
+
+# ================
 # Realsense Setup
 # ================
 
@@ -81,42 +86,49 @@ pipeline.start(config)
 try:
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
 		sock.connect((HOST, PORT))
+		sock.setblocking(0)
 
 		while True:
-			# try:
-				# ==== FRAME QUERYING ====
-				frames = pipeline.wait_for_frames()
-				depth_frame = frames.get_depth_frame()
-				color_frame = frames.get_color_frame()
-				if not depth_frame or not color_frame:
-					continue
+			
+			# ==== FRAME QUERYING ====
+			frames = pipeline.wait_for_frames()
+			depth_frame = frames.get_depth_frame()
+			color_frame = frames.get_color_frame()
+			if not depth_frame or not color_frame:
+				continue
 
-				color_image = np.asanyarray(color_frame.get_data())
+			color_image = np.asanyarray(color_frame.get_data())
+			# ==== MARKER TRACKING ====
+			detection_results = mediapipe.detect(color_image)
+			color_image = mediapipe.draw_landmarks_on_image(color_image, detection_results)
+			skeleton_data = mediapipe.skeleton(color_image, detection_results, depth_frame)
+			if skeleton_data is not None:
+					send(sock, skeleton_data)
 
-				corners, ids, rejected = arucoDetector.detectMarkers(color_image)
+			# ==== MARKER TRACKING ====
+			corners, ids, rejected = arucoDetector.detectMarkers(color_image)
+			depthIntrinsics = depth_frame.profile.as_video_stream_profile().intrinsics
+			
+			for i, cornerSet in enumerate(corners):
+				assert(cornerSet.shape[0] == 1)
+				cornerSet = cornerSet[0, ...]
 
-				# ==== MARKER TRACKING ====
-				depthIntrinsics = depth_frame.profile.as_video_stream_profile().intrinsics
+				(cornerA_x, cornerA_y) = cornerSet[0]
+				(cornerB_x, cornerB_y) = cornerSet[2]
+
+				centerSS = [(cornerA_x + cornerB_x) / 2.0, (cornerA_y + cornerB_y) / 2]
+				centerZ = depth_frame.get_distance(centerSS[0], centerSS[1])
+
+				centerWS = rs.rs2_deproject_pixel_to_point(depthIntrinsics, centerSS, centerZ)
 				
-				for i, cornerSet in enumerate(corners):
-					assert(cornerSet.shape[0] == 1)
-					cornerSet = cornerSet[0, ...]
+				id = ids[i][0]
+				MarkerCentroids[id] = centerWS
+				if MarkerAges[id] != -2:
+					MarkerAges[id] = CurrentTime
 
-					(cornerA_x, cornerA_y) = cornerSet[0]
-					(cornerB_x, cornerB_y) = cornerSet[2]
-
-					centerSS = [(cornerA_x + cornerB_x) / 2.0, (cornerA_y + cornerB_y) / 2]
-					centerZ = depth_frame.get_distance(centerSS[0], centerSS[1])
-
-					centerWS = rs.rs2_deproject_pixel_to_point(depthIntrinsics, centerSS, centerZ)
-					
-					id = ids[i][0]
-					MarkerCentroids[id] = centerWS
-					if MarkerAges[id] != -2:
-						MarkerAges[id] = CurrentTime
-
-				# ==== SERVER MESSAGES ====
-				if HasCalibrated == False:
+			# ==== SERVER MESSAGES ====
+			if HasCalibrated == False:
+				try:
 					msg = receive(sock)
 
 					# Really shouldn't need this line
@@ -146,33 +158,33 @@ try:
 						json.dump(outMatrix, json_file)
 
 					HasCalibrated = True
-				else:
-					outMarkerIds = []
-					outMarkerCentroids = []
-					for i, markerAge in enumerate(MarkerAges):
-						# Ignore calibrants and unencountereds
-						if markerAge < 0:
-							continue
+				except:
+					pass
+			else:
+				outMarkerIds = []
+				outMarkerCentroids = []
+				for i, markerAge in enumerate(MarkerAges):
+					# Ignore calibrants and unencountereds
+					if markerAge < 0:
+						continue
 
-						outId = i
+					outId = i
+					outMarkerCentroid = {"x": -999.0, "y": -999.0, "z": -999.0}
+					if (CurrentTime - markerAge) > LIFETIME_THRESHOLD:
 						outMarkerCentroid = {"x": -999.0, "y": -999.0, "z": -999.0}
-						if (CurrentTime - markerAge) > LIFETIME_THRESHOLD:
-							outMarkerCentroid = {"x": -999.0, "y": -999.0, "z": -999.0}
-						else:
-							centroid = MarkerCentroids[i]
-							centroid = CalibrationMatrix.transpose().dot(np.append(centroid, 1.0))
-							outMarkerCentroid = {"x": centroid[0].item(), "y": centroid[1].item(), "z": centroid[2].item()}
-						
-						outMarkerIds.append(outId)
-						outMarkerCentroids.append(outMarkerCentroid)
+					else:
+						centroid = MarkerCentroids[i]
+						centroid = CalibrationMatrix.transpose().dot(np.append(centroid, 1.0))
+						outMarkerCentroid = {"x": centroid[0].item(), "y": centroid[1].item(), "z": centroid[2].item()}
+					
+					outMarkerIds.append(outId)
+					outMarkerCentroids.append(outMarkerCentroid)
 
-					msg["IncomingIds"] = outMarkerIds
-					msg["IncomingPositions"] = outMarkerCentroids
-					send(sock, msg)
+				msg["IncomingIds"] = outMarkerIds
+				msg["IncomingPositions"] = outMarkerCentroids
+				send(sock, msg)
 
-				CurrentTime += 1
-			# except KeyboardInterrupt:
-			# 	exit()
+			CurrentTime += 1
 finally:
 	# Stop streaming
 	pipeline.stop()
