@@ -41,7 +41,7 @@ def send(sock, msg):
 	print("Sent: ", msg)
 
 # ================
-# Realsense Setup
+# Realsense Set`up`
 # ================
 
 # Configure depth and color streams

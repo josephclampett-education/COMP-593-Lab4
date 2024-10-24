@@ -30,7 +30,7 @@ public class TCP : MonoBehaviour
     public bool ShouldSendCalibrate = false;
 
     public SpatialAnchors AnchorManager;
-    GameDaemon GameDaemon;
+    public GameDaemon GameDaemon;
     
     public Transform Minecart;
     public int Minecart_ARUCO_ID = 50;
@@ -49,16 +49,10 @@ public class TCP : MonoBehaviour
 
         public int[] IncomingIds;
         public Vector3[] IncomingPositions;
-        
-        public float LHand_x;
-        public float LHand_y;
-        public float LHand_z;
-        public float RHand_x;
-        public float RHand_y;
-        public float RHand_z;
-        public float Head_x;
-        public float Head_y;
-        public float Head_z;
+
+        public Vector3 LHand;
+        public Vector3 RHand;
+        public Vector3 Head;
     }
     
     private static Vector3 QUEUE_REMOVAL_POSITION = new Vector3(-999.0f, -999.0f, -999.0f);
@@ -122,6 +116,8 @@ public class TCP : MonoBehaviour
         {
             foreach (Message message in MessageQueue)
             {
+                Move(message);
+                
                 int[] incomingIds = message.IncomingIds;
                 Vector3[] incomingPositions = message.IncomingPositions;
 
@@ -167,6 +163,24 @@ public class TCP : MonoBehaviour
             }
             MessageQueue.Clear();
         }
+    }
+
+    public Transform LHand;
+    public Transform RHand;
+    public Transform Head;
+    public void Move(Message message)
+    {
+        Vector3 LHandLocalPosition = message.LHand;
+        Vector3 RHandLocalPosition = message.RHand;
+        Vector3 HeadLocalPosition = message.Head;
+        
+        // LHandLocalPosition = HomographyMatrix.MultiplyPoint(LHandLocalPosition) + PostShift;
+        // RHandLocalPosition = HomographyMatrix.MultiplyPoint(RHandLocalPosition) + PostShift;
+        // HeadLocalPosition = HomographyMatrix.MultiplyPoint(HeadLocalPosition) + PostShift;
+        
+        LHand.localPosition = LHandLocalPosition;
+        RHand.localPosition = RHandLocalPosition;
+        Head.localPosition = HeadLocalPosition;
     }
 
     private void SetupServer()

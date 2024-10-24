@@ -8,14 +8,9 @@ public class GemCollision : MonoBehaviour
 {
     public float respawnTime = 2.0f; // Time to wait before respawning
    // private bool isRespawning = false; // Flag to check if the gem is respawning
-    private Rigidbody gemRigidbody; // Reference to the gem's Rigidbody
+
     private GameObject NPC;
     private GameObject Gems;
-    public bool message;
-    private void Start()
-    {
-        gemRigidbody = GetComponent<Rigidbody>(); 
-    }
 
     private void OnCollisionEnter(Collision collision)
     {
@@ -47,18 +42,5 @@ public class GemCollision : MonoBehaviour
         GetComponent<Renderer>().enabled = true; 
         // Re-enable any other components that were disabled
         GetComponent<BoxCollider>().enabled = true; 
-    }
-
-
-    public void Update()
-    {
-      
-    }
-
-    public void ToggleEnable()
-    {
-        Renderer rend = GetComponent<Renderer>();
-        bool enable = rend.enabled;
-        rend.enabled = !enable;
     }
 }

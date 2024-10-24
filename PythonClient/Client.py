@@ -8,6 +8,7 @@ import json
 import pyrealsense2 as rs
 import numpy as np
 import cv2
+from MediaPipe import MediaPipe
 
 HOST = "127.0.0.1"  # The server's hostname or IP address
 PORT = 80           # The port used by the server
@@ -181,9 +182,23 @@ try:
 				msg["IncomingIds"] = outMarkerIds
 				msg["IncomingPositions"] = outMarkerCentroids
 				if skeleton_data is not None:
-					msg.append(skeleton_data)
+					tempLHand = [skeleton_data["LHand_x"], skeleton_data["LHand_y"], skeleton_data["LHand_z"]]
+					tempLHand = CalibrationMatrix.transpose().dot(np.append(tempLHand, 1.0))
+					tempRHand = [skeleton_data["RHand_x"], skeleton_data["RHand_y"], skeleton_data["RHand_z"]]
+					tempRHand = CalibrationMatrix.transpose().dot(np.append(tempRHand, 1.0))
+					tempHead = [skeleton_data["Head_x"], skeleton_data["Head_y"], skeleton_data["Head_z"]]
+					tempHead = CalibrationMatrix.transpose().dot(np.append(tempHead, 1.0))
+
+					msg["LHand"] = {"x": tempLHand[0].item(), "y": tempLHand[1].item(), "z": tempLHand[2].item()}
+					msg["RHand"] = {"x": tempRHand[0].item(), "y": tempRHand[1].item(), "z": tempRHand[2].item()}
+					msg["Head"] = {"x": tempHead[0].item(), "y": tempHead[1].item(), "z": tempHead[2].item()}
+
 				send(sock, msg)
 
+				# Show images
+				cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
+				cv2.imshow('RealSense', color_image)
+				cv2.waitKey(1)
 			CurrentTime += 1
 finally:
 	# Stop streaming
