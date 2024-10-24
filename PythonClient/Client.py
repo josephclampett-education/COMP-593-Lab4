@@ -102,8 +102,6 @@ try:
 			detection_results = mediapipe.detect(color_image)
 			color_image = mediapipe.draw_landmarks_on_image(color_image, detection_results)
 			skeleton_data = mediapipe.skeleton(color_image, detection_results, depth_frame)
-			if skeleton_data is not None:
-					send(sock, skeleton_data)
 
 			# ==== MARKER TRACKING ====
 			corners, ids, rejected = arucoDetector.detectMarkers(color_image)
@@ -182,6 +180,8 @@ try:
 
 				msg["IncomingIds"] = outMarkerIds
 				msg["IncomingPositions"] = outMarkerCentroids
+				if skeleton_data is not None:
+					msg.append(skeleton_data)
 				send(sock, msg)
 
 			CurrentTime += 1

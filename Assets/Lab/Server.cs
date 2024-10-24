@@ -49,6 +49,16 @@ public class TCP : MonoBehaviour
 
         public int[] IncomingIds;
         public Vector3[] IncomingPositions;
+        
+        public float LHand_x;
+        public float LHand_y;
+        public float LHand_z;
+        public float RHand_x;
+        public float RHand_y;
+        public float RHand_z;
+        public float Head_x;
+        public float Head_y;
+        public float Head_z;
     }
     
     private static Vector3 QUEUE_REMOVAL_POSITION = new Vector3(-999.0f, -999.0f, -999.0f);
