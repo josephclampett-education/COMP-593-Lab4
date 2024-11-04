@@ -1,10 +1,3 @@
-/*
-Reference
-Implementing a Basic TCP Server in Unity: A Step-by-Step Guide
-By RabeeQiblawi Nov 20, 2023
-https://medium.com/@rabeeqiblawi/implementing-a-basic-tcp-server-in-unity-a-step-by-step-guide-449d8504d1c5
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -16,31 +9,38 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Serialization;
 
-public class TCP : MonoBehaviour
+public class Server : MonoBehaviour
 {
-    const string hostIP = "127.0.0.1"; // Select your IP
-    const int port = 80; // Select your port
-    TcpListener server = null;
-    TcpClient client = null;
-    NetworkStream stream = null;
-    Thread thread;
-
-    // Define your own message
-    [DoNotSerialize, HideInInspector]
-    public bool ShouldSendCalibrate = false;
-
+    // Setup Linkage
+    public Transform UnityRoot;
+    public Transform RealsenseRoot;
     public SpatialAnchors AnchorManager;
     public GameDaemon GameDaemon;
     
+    // Game Object Linkage
     public Transform Minecart;
-    public int Minecart_ARUCO_ID = 50;
-    public int Button_ARUCO_ID = 7;
-    [FormerlySerializedAs("IsButton")] public bool SignalMarkerIsVisible = true;
+    public Transform NPC_LHand;
+    public Transform NPC_RHand;
+    public Transform NPC_Head;
     
+    // SIGNAL
+    private bool ServerConnected = false;
+    [DoNotSerialize, HideInInspector]
+    public bool ShouldSendCalibrate = false;
+    private bool SignalMarkerIsVisible = true;
+    
+    // Constants
+    private int MINECART_ARUCO_ID = 50;
+    private int BUTTON_ARUCO_ID = 7;
+    private static int[] MARKER_INDEX_TABLE = { 3, 5, 10, 50 };
+    private static Vector3 QUEUE_REMOVAL_POSITION = new (-999.0f, -999.0f, -999.0f);
+    
+    // Cached objects
     private Transform UnityMarker;
     private Transform UnityMarkerOwner;
     private Transform RealsenseMarkerOwner;
     
+    // Message
     [Serializable]
     public class Message
     {
@@ -53,70 +53,85 @@ public class TCP : MonoBehaviour
         public Vector3 LHand;
         public Vector3 RHand;
         public Vector3 Head;
-    }
-    
-    private static Vector3 QUEUE_REMOVAL_POSITION = new Vector3(-999.0f, -999.0f, -999.0f);
 
-    private float timer = 0;
-    private static object Lock = new object();  // lock to prevent conflict in main thread and server thread
-    private List<Message> MessageQueue = new List<Message>();
+        public Vector3 CalibratedOrigin;
+        public Vector3 CalibratedForward;
+    }
 
     private void Start()
     {
         UnityMarkerOwner = AnchorManager.transform.Find("UnityCreated");
         if (UnityMarkerOwner == null)
-            Debug.LogError("No UnityCreated found");
+            Debug.LogError("SETUP: No UnityCreated found");
         
         RealsenseMarkerOwner = AnchorManager.transform.Find("RealsenseCreated");
         if (RealsenseMarkerOwner == null)
-            Debug.LogError("No RealsenseCreated found");
+            Debug.LogError("SETUP: No RealsenseCreated found");
         
         thread = new Thread(new ThreadStart(SetupServer));
         thread.Start();
     }
-
-    private bool ServerConnected = false;
-
-    //private static int[] TempLut = new int[] { 9, 8, 5, 1 };
-    private static int[] TempLut = new int[] { 1, 2, 3, 4 };
-
+    
+    public void SetNPCPose(Message message)
+    {
+        Vector3 lHand = message.LHand;
+        Vector3 rHand = message.RHand;
+        Vector3 head = message.Head;
+        
+        NPC_LHand.localPosition = lHand;
+        NPC_RHand.localPosition = rHand;
+        NPC_Head.localPosition = head;
+    }
+    
     private void Update()
     {
         if (ServerConnected == false)
             return;
         
+        // ------------
+        // Calibration
+        // ------------
         if (ShouldSendCalibrate)
         {
-            Message msg = new Message();
-
-            int childCount = UnityMarkerOwner.childCount;
+            int markerCount = UnityMarkerOwner.childCount;
             
-            msg.OutgoingIds = new int[childCount];
-            msg.OutgoingPositions = new Vector3[childCount];
-            for (int i = 0; i < childCount; i++)
+            Message msg = new Message();
+            msg.OutgoingIds = new int[markerCount];
+            msg.OutgoingPositions = new Vector3[markerCount];
+            for (int i = 0; i < markerCount; i++)
             {
                 Transform anchor = UnityMarkerOwner.GetChild(i);
-                //anchor = anchor.GetChild(0);
                 
-                //msg.OutgoingIds[i] = i + 1;
-                msg.OutgoingIds[i] = TempLut[i];
-                msg.OutgoingPositions[i] = anchor.position;
+                int id = MARKER_INDEX_TABLE[i];
+                Vector3 position = anchor.position;
+                msg.OutgoingIds[i] = id;
+                msg.OutgoingPositions[i] = position;
                 
-                Debug.LogWarning($"Position: {anchor.position}");
+                Debug.Log($"CALIBRATION: Sent {anchor.position} for {id}");
             }
             
-            Debug.Log($"Sent positions for {childCount} anchors!");
+            Debug.Log($"CALIBRATION: Sent positions for {markerCount} markers!");
 
             ShouldSendCalibrate = false;
             
             SendMessageToClient(msg);
         }
-        
+          
+        // --------------
+        // Normal Runtime
+        // --------------
         lock(Lock)
         {
             foreach (Message message in MessageQueue)
             {
-                Move(message);
+                Vector3 calibratedOrigin = message.CalibratedOrigin;
+                calibratedOrigin.y = 0;
+                UnityRoot.position = calibratedOrigin;
+                
+                Vector3 calibratedForward = message.CalibratedForward - message.CalibratedOrigin;
+                calibratedForward.y = 0;
+                calibratedForward.Normalize();
+                UnityRoot.forward = calibratedForward;
                 
                 int[] incomingIds = message.IncomingIds;
                 Vector3[] incomingPositions = message.IncomingPositions;
@@ -126,12 +141,12 @@ public class TCP : MonoBehaviour
                     int id = incomingIds[i];
                     Vector3 incomingPosition = incomingPositions[i];
 
-                    if (id == Minecart_ARUCO_ID)
+                    if (id == MINECART_ARUCO_ID)
                     {
                         if (incomingPosition != QUEUE_REMOVAL_POSITION)
                             Minecart.localPosition = new Vector3(incomingPosition.x, 0, incomingPosition.z);
                     }
-                    else if (id == Button_ARUCO_ID)
+                    else if (id == BUTTON_ARUCO_ID)
                     {
                         if (SignalMarkerIsVisible && incomingPosition == QUEUE_REMOVAL_POSITION)
                             GameDaemon.OnMarkerHidden();
@@ -141,8 +156,8 @@ public class TCP : MonoBehaviour
                         SignalMarkerIsVisible = incomingPosition != QUEUE_REMOVAL_POSITION;
                     }
                         
+                    // Remove and remove ALL markers for bookkeeping
                     Transform markerObject = RealsenseMarkerOwner.Find(id.ToString());
-                    
                     if (incomingPosition == QUEUE_REMOVAL_POSITION)
                     {
                         if (markerObject != null)
@@ -151,38 +166,30 @@ public class TCP : MonoBehaviour
                     else
                     {
                         if (markerObject == null)
-                        {
-                            GameObject markerGameObject = AnchorManager.CreateSpatialAnchorForRealsense(incomingPosition, id);
-                        }
+                            AnchorManager.CreateSpatialAnchorForRealsense(incomingPosition, id);
                         else
-                        {
                             markerObject.localPosition = incomingPosition;
-                        }
                     }
                 }
+                
+                SetNPCPose(message);
             }
             MessageQueue.Clear();
         }
     }
-
-    public Transform LHand;
-    public Transform RHand;
-    public Transform Head;
-    public void Move(Message message)
-    {
-        Vector3 LHandLocalPosition = message.LHand;
-        Vector3 RHandLocalPosition = message.RHand;
-        Vector3 HeadLocalPosition = message.Head;
-        
-        // LHandLocalPosition = HomographyMatrix.MultiplyPoint(LHandLocalPosition) + PostShift;
-        // RHandLocalPosition = HomographyMatrix.MultiplyPoint(RHandLocalPosition) + PostShift;
-        // HeadLocalPosition = HomographyMatrix.MultiplyPoint(HeadLocalPosition) + PostShift;
-        
-        LHand.localPosition = LHandLocalPosition;
-        RHand.localPosition = RHandLocalPosition;
-        Head.localPosition = HeadLocalPosition;
-    }
-
+    
+    // ================================
+    // SERVER UTILS
+    // ================================
+    private const string hostIP = "127.0.0.1"; // Select your IP
+    private const int port = 80; // Select your port
+    private TcpListener server = null;
+    private TcpClient client = null;
+    private NetworkStream stream = null;
+    private Thread thread;
+    
+    private static object Lock = new object();  // lock to prevent conflict in main thread and server thread
+    private List<Message> MessageQueue = new List<Message>();
     private void SetupServer()
     {
         try
@@ -229,7 +236,6 @@ public class TCP : MonoBehaviour
             server.Stop();
         }
     }
-
     private void OnApplicationQuit()
     {
         stream.Close();
@@ -237,24 +243,12 @@ public class TCP : MonoBehaviour
         server.Stop();
         thread.Abort();
     }
-
     public void SendMessageToClient(Message message)
     {
         byte[] msg = Encoding.UTF8.GetBytes(Encode(message));
         stream.Write(msg, 0, msg.Length);
         Debug.Log("Sent: " + message);
     }
-
-    // Encode message from struct to Json String
-    public string Encode(Message message)
-    {
-        return JsonUtility.ToJson(message, true);
-    }
-
-    // Decode messaage from Json String to struct
-    public Message Decode(string json_string)
-    {
-        Message msg = JsonUtility.FromJson<Message>(json_string);
-        return msg;
-    }
+    public string Encode(Message message) => JsonUtility.ToJson(message, true);
+    public Message Decode(string json_string) => JsonUtility.FromJson<Message>(json_string);
 }

@@ -12,10 +12,10 @@ public class GemCollision : MonoBehaviour
     private GameObject NPC;
     private GameObject Gems;
 
-    private void OnCollisionEnter(Collision collision)
+    private void OnTriggerEnter(Collider collider)
     {
-        Debug.Log("Collision detected with: " + collision.gameObject.name);
-        if (collision.gameObject.CompareTag("MineCart") )
+        Debug.Log("Collision detected with: " + collider.gameObject.name);
+        if (collider.gameObject.name == "MineCart")
         {
             Debug.Log("Gem collided with MineCart");
             StartCoroutine(RespawnBall());

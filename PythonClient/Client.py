@@ -173,7 +173,8 @@ try:
 						outMarkerCentroid = {"x": -999.0, "y": -999.0, "z": -999.0}
 					else:
 						centroid = MarkerCentroids[i]
-						centroid = CalibrationMatrix.transpose().dot(np.append(centroid, 1.0))
+						# centroid = CalibrationMatrix.transpose().dot(np.append(centroid, 1.0))
+						centroid = np.append(centroid, 1.0)
 						outMarkerCentroid = {"x": centroid[0].item(), "y": centroid[1].item(), "z": centroid[2].item()}
 					
 					outMarkerIds.append(outId)
@@ -192,6 +193,11 @@ try:
 					msg["LHand"] = {"x": tempLHand[0].item(), "y": tempLHand[1].item(), "z": tempLHand[2].item()}
 					msg["RHand"] = {"x": tempRHand[0].item(), "y": tempRHand[1].item(), "z": tempRHand[2].item()}
 					msg["Head"] = {"x": tempHead[0].item(), "y": tempHead[1].item(), "z": tempHead[2].item()}
+
+				calibratedOrigin = CalibrationMatrix.transpose().dot([0, 0, 0, 1.0])
+				msg["CalibratedOrigin"] = {"x": calibratedOrigin[0].item(), "y": calibratedOrigin[1].item(), "z": calibratedOrigin[2].item()}
+				calibratedForward = CalibrationMatrix.transpose().dot([0.0, 0, 1.0, 1.0])
+				msg["CalibratedForward"] = {"x": calibratedForward[0].item(), "y": calibratedForward[1].item(), "z": calibratedForward[2].item()}
 
 				send(sock, msg)
 

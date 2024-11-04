@@ -20,7 +20,7 @@ public class SpatialAnchors : MonoBehaviour
     private const float Speed = 0.4f;
     
     // Calibration Interop
-    public TCP Server;
+    public Server Server;
     private bool HasCalibrated = false;
     
     private Transform UnityMarkerOwner;

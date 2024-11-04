@@ -29,7 +29,7 @@ namespace Lab
             GemsOwner.SetActive(false);
             NPC.SetActive(true);
             
-            if (StageIndex > 2)
+            if (StageIndex > 1)
             {
                 SpeechText.text = "Game Over!";
             }
@@ -43,7 +43,7 @@ namespace Lab
         {
             Debug.LogWarning("GAME: Signal Marker Hidden!");
             
-            if (StageIndex > 2)
+            if (StageIndex > 1)
                 return;
             
             GemsOwner.SetActive(true);
