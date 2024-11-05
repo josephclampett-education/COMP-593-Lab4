@@ -16,6 +16,8 @@ public class Server : MonoBehaviour
     public Transform RealsenseRoot;
     public SpatialAnchors AnchorManager;
     public GameDaemon GameDaemon;
+    public Transform UnityMarkerOwner;
+    public Transform RealsenseMarkerOwner;
     
     // Game Object Linkage
     public Transform Minecart;
@@ -28,17 +30,13 @@ public class Server : MonoBehaviour
     [DoNotSerialize, HideInInspector]
     public bool ShouldSendCalibrate = false;
     private bool SignalMarkerIsVisible = true;
+    private bool HasSetWorldMatrix = false;
     
     // Constants
     private int MINECART_ARUCO_ID = 50;
-    private int BUTTON_ARUCO_ID = 7;
-    private static int[] MARKER_INDEX_TABLE = { 3, 5, 10, 50 };
+    private int BUTTON_ARUCO_ID = 184;
+    private static int[] MARKER_INDEX_TABLE = { 180, 181, 182, 183 };
     private static Vector3 QUEUE_REMOVAL_POSITION = new (-999.0f, -999.0f, -999.0f);
-    
-    // Cached objects
-    private Transform UnityMarker;
-    private Transform UnityMarkerOwner;
-    private Transform RealsenseMarkerOwner;
     
     // Message
     [Serializable]
@@ -60,14 +58,6 @@ public class Server : MonoBehaviour
 
     private void Start()
     {
-        UnityMarkerOwner = AnchorManager.transform.Find("UnityCreated");
-        if (UnityMarkerOwner == null)
-            Debug.LogError("SETUP: No UnityCreated found");
-        
-        RealsenseMarkerOwner = AnchorManager.transform.Find("RealsenseCreated");
-        if (RealsenseMarkerOwner == null)
-            Debug.LogError("SETUP: No RealsenseCreated found");
-        
         thread = new Thread(new ThreadStart(SetupServer));
         thread.Start();
     }
@@ -94,6 +84,12 @@ public class Server : MonoBehaviour
         if (ShouldSendCalibrate)
         {
             int markerCount = UnityMarkerOwner.childCount;
+            
+            // // FIRST: Set whole scene orientation!
+            // Transform masterAnchor = UnityMarkerOwner.GetChild(0); // Master anchor
+            // UnityRoot.parent = RealsenseRoot;
+            // RealsenseRoot.parent = masterAnchor;
+            
             
             Message msg = new Message();
             msg.OutgoingIds = new int[markerCount];
@@ -124,14 +120,24 @@ public class Server : MonoBehaviour
         {
             foreach (Message message in MessageQueue)
             {
-                Vector3 calibratedOrigin = message.CalibratedOrigin;
-                calibratedOrigin.y = 0;
-                UnityRoot.position = calibratedOrigin;
+                if (!HasSetWorldMatrix)
+                {
+                    Vector3 calibratedOrigin = message.CalibratedOrigin;
+                    calibratedOrigin.y = 0;
+                    RealsenseRoot.position = calibratedOrigin;
                 
-                Vector3 calibratedForward = message.CalibratedForward - message.CalibratedOrigin;
-                calibratedForward.y = 0;
-                calibratedForward.Normalize();
-                UnityRoot.forward = calibratedForward;
+                    Vector3 calibratedForward = message.CalibratedForward;
+                    calibratedForward.y = 0;
+                    calibratedForward = calibratedForward - calibratedOrigin;
+                    calibratedForward.Normalize();
+                    RealsenseRoot.forward = calibratedForward;
+                    
+                    // FIRST: Set whole scene orientation!
+                    Transform masterAnchor = UnityMarkerOwner.GetChild(0); // Master anchor
+                    RealsenseRoot.SetParent(masterAnchor, true);
+
+                    HasSetWorldMatrix = true;
+                }
                 
                 int[] incomingIds = message.IncomingIds;
                 Vector3[] incomingPositions = message.IncomingPositions;
@@ -217,11 +223,20 @@ public class Server : MonoBehaviour
                 while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
                 {
                     data = Encoding.UTF8.GetString(buffer, 0, i);
-                    Message message = Decode(data);
-                    // Add received message to queue
-                    lock(Lock)
+
+                    try
                     {
-                        MessageQueue.Add(message);
+                        Message message = Decode(data);
+                    
+                        // Add received message to queue
+                        lock(Lock)
+                        {
+                            MessageQueue.Add(message);
+                        }
+                    }
+                    catch (ArgumentException)
+                    {
+                        Debug.LogError($"SERVER: Malformed data: {data}");
                     }
                 }
                 client.Close();

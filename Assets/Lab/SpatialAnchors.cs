@@ -23,18 +23,11 @@ public class SpatialAnchors : MonoBehaviour
     public Server Server;
     private bool HasCalibrated = false;
     
-    private Transform UnityMarkerOwner;
-    private Transform RealsenseMarkerOwner;
+    public Transform UnityMarkerOwner;
+    public Transform RealsenseMarkerOwner;
 
     public void Start()
     {
-        UnityMarkerOwner = this.transform.Find("UnityCreated");
-        if (UnityMarkerOwner == null)
-            Debug.LogError("No UnityCreated found");
-        
-        RealsenseMarkerOwner = this.transform.Find("RealsenseCreated");
-        if (RealsenseMarkerOwner == null)
-            Debug.LogError("No RealsenseCreated found");
     }
 
     // Update is called once per frame

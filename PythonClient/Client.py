@@ -10,6 +10,12 @@ import numpy as np
 import cv2
 from MediaPipe import MediaPipe
 
+class RoundingFloat(float):
+	__repr__ = staticmethod(lambda x: format(x, '.5f'))
+
+json.encoder.c_make_encoder = None
+json.encoder.float = RoundingFloat
+
 HOST = "127.0.0.1"  # The server's hostname or IP address
 PORT = 80           # The port used by the server
 
@@ -90,7 +96,6 @@ try:
 		sock.setblocking(0)
 
 		while True:
-			
 			# ==== FRAME QUERYING ====
 			frames = pipeline.wait_for_frames()
 			depth_frame = frames.get_depth_frame()
@@ -100,7 +105,9 @@ try:
 
 			color_image = np.asanyarray(color_frame.get_data())
 			# ==== MARKER TRACKING ====
-			detection_results = mediapipe.detect(color_image)
+			bodyTrackingImageSource = np.copy(color_image)
+			bodyTrackingImageSource[:, :bodyTrackingImageSource.shape[1] // 2, :] = 0.0
+			detection_results = mediapipe.detect(bodyTrackingImageSource)
 			color_image = mediapipe.draw_landmarks_on_image(color_image, detection_results)
 			skeleton_data = mediapipe.skeleton(color_image, detection_results, depth_frame)
 
@@ -160,6 +167,7 @@ try:
 				except:
 					pass
 			else:
+				# ==== Process all incoming markers ==== 
 				outMarkerIds = []
 				outMarkerCentroids = []
 				for i, markerAge in enumerate(MarkerAges):
@@ -173,31 +181,30 @@ try:
 						outMarkerCentroid = {"x": -999.0, "y": -999.0, "z": -999.0}
 					else:
 						centroid = MarkerCentroids[i]
-						# centroid = CalibrationMatrix.transpose().dot(np.append(centroid, 1.0))
 						centroid = np.append(centroid, 1.0)
-						outMarkerCentroid = {"x": centroid[0].item(), "y": centroid[1].item(), "z": centroid[2].item()}
+						outMarkerCentroid = {"x": centroid[0].item(), "y": -centroid[1].item(), "z": centroid[2].item()}
 					
 					outMarkerIds.append(outId)
 					outMarkerCentroids.append(outMarkerCentroid)
-
 				msg["IncomingIds"] = outMarkerIds
 				msg["IncomingPositions"] = outMarkerCentroids
-				if skeleton_data is not None:
-					tempLHand = [skeleton_data["LHand_x"], skeleton_data["LHand_y"], skeleton_data["LHand_z"]]
-					tempLHand = CalibrationMatrix.transpose().dot(np.append(tempLHand, 1.0))
-					tempRHand = [skeleton_data["RHand_x"], skeleton_data["RHand_y"], skeleton_data["RHand_z"]]
-					tempRHand = CalibrationMatrix.transpose().dot(np.append(tempRHand, 1.0))
-					tempHead = [skeleton_data["Head_x"], skeleton_data["Head_y"], skeleton_data["Head_z"]]
-					tempHead = CalibrationMatrix.transpose().dot(np.append(tempHead, 1.0))
 
-					msg["LHand"] = {"x": tempLHand[0].item(), "y": tempLHand[1].item(), "z": tempLHand[2].item()}
-					msg["RHand"] = {"x": tempRHand[0].item(), "y": tempRHand[1].item(), "z": tempRHand[2].item()}
-					msg["Head"] = {"x": tempHead[0].item(), "y": tempHead[1].item(), "z": tempHead[2].item()}
-
+				# ==== Create basis info ==== 
 				calibratedOrigin = CalibrationMatrix.transpose().dot([0, 0, 0, 1.0])
 				msg["CalibratedOrigin"] = {"x": calibratedOrigin[0].item(), "y": calibratedOrigin[1].item(), "z": calibratedOrigin[2].item()}
 				calibratedForward = CalibrationMatrix.transpose().dot([0.0, 0, 1.0, 1.0])
 				msg["CalibratedForward"] = {"x": calibratedForward[0].item(), "y": calibratedForward[1].item(), "z": calibratedForward[2].item()}
+
+				# ==== Process skeleton data ==== 
+				if skeleton_data is not None:
+					tempLHand = {"x": skeleton_data["LHand_x"], "y": -skeleton_data["LHand_y"], "z": skeleton_data["LHand_z"]}
+					msg["LHand"] = tempLHand
+
+					tempRHand = {"x": skeleton_data["RHand_x"], "y": -skeleton_data["RHand_y"], "z": skeleton_data["RHand_z"]}
+					msg["RHand"] = tempRHand
+
+					tempHead = {"x": skeleton_data["Head_x"], "y": -skeleton_data["Head_y"], "z": skeleton_data["Head_z"]}
+					msg["Head"] = tempHead
 
 				send(sock, msg)
 
