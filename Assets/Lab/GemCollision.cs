@@ -11,13 +11,24 @@ public class GemCollision : MonoBehaviour
 
     private GameObject NPC;
     private GameObject Gems;
+    
+    private AudioSource AudioSource;
+
+    private void Start()
+    {
+        AudioSource = GetComponent<AudioSource>();
+        if (AudioSource == null)
+            AudioSource = gameObject.AddComponent<AudioSource>();
+        
+        AudioSource.clip = Resources.Load<AudioClip>("Audio/PlinkSound");
+    }
 
     private void OnTriggerEnter(Collider collider)
     {
         Debug.Log("Collision detected with: " + collider.gameObject.name);
         if (collider.gameObject.name == "MineCart")
         {
-            
+            AudioSource.Play();
             
             Debug.Log("Gem collided with MineCart");
             StartCoroutine(RespawnBall());
