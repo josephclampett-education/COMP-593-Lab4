@@ -17,6 +17,8 @@ public class GemCollision : MonoBehaviour
         Debug.Log("Collision detected with: " + collider.gameObject.name);
         if (collider.gameObject.name == "MineCart")
         {
+            
+            
             Debug.Log("Gem collided with MineCart");
             StartCoroutine(RespawnBall());
         }
