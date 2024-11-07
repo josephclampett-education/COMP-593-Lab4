@@ -25,6 +25,7 @@ public class SpatialAnchors : MonoBehaviour
     
     public Transform UnityMarkerOwner;
     public Transform RealsenseMarkerOwner;
+    public Transform MinecartCalibration;
 
     public void Start()
     {
@@ -44,8 +45,8 @@ public class SpatialAnchors : MonoBehaviour
         Vector2 topAxis = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, Controller.LTouch);
         Vector3 translation = new Vector3(sideAxis.x, topAxis.y, sideAxis.y) * Speed * Time.deltaTime;
 
-        RealsenseMarkerOwner.Rotate(Vector3.up, topAxis.x * Mathf.Rad2Deg * Speed * Time.deltaTime);
-        RealsenseMarkerOwner.Translate(translation, Space.World);
+        MinecartCalibration.Rotate(Vector3.up, topAxis.x * Mathf.Rad2Deg * Speed * Time.deltaTime);
+        MinecartCalibration.Translate(translation, Space.World);
         
         if (HasCalibrated == false && OVRInput.Get(OVRInput.Button.One) && UnityMarkerOwner.childCount >= 4)
         {
